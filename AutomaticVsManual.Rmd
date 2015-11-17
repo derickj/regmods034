@@ -1,0 +1,153 @@
+---
+title: "An Analysis of Gas Consumption"
+author: "derickj regmods-034"
+date: "21 November 2015"
+output: html_document
+---
+
+### Executive Summary
+
+In this report, the data in the "mtcars" dataset in the datatsets library in R are examined to determine what impact automatic or manual transmission has on gas consumption.  In particular, two questions are addressed:
+
+1. Is an automatic or manual transmission better for MPG?
+2. Quantify the MPG difference between automatic and manual transmissions.
+
+Regarding Question 1, it is concluded that manual transmission is better for MPG, cars with manual transmission is in general more fuel efficient than cars with automatic transmission.  While the effect of manual transmission on MPG is on averag 7.245 more than for automatic when all other variables are ignored, the best fit model indicates that this effect is much less (0.1765) due to the confounding effect of Weight and number of cylinders, which are much more significant as predictors of MPG.
+
+### Exploratory Analysis
+
+```{r libs, echo=FALSE,results="hide"}
+library(datasets); library(reshape2); library(GGally); library(ggplot2); library(car)
+```
+
+In preparation of the analysis, the necessary libraries and the dataset were loaded and the dataset examined. Figure 1 in Appendix 1 seems to indicate that the average mpg for automatic transmission is less than for cars with manual transmission. 
+
+```{r explore, echo=FALSE, results="hide"}
+data(mtcars)
+str(mtcars)
+head(mtcars)
+summary(mtcars)
+# Transform the factor variable
+mtcars$trans<- ifelse(mtcars$am == 0, "automatic", "manual")
+mtcars$trans <- as.factor (mtcars$trans)
+```
+
+### Question 1
+
+In order to answer question 1, two hypotheses are tested, i.e. ($H_0 : \mu_1 > \mu_2$) and ($H_0 : \mu_1 < \mu_2$), where \mu_1 is the mean of the mpg for cars with automatic transmissions, and \mu_2 the means for cars with manual transmission.  
+
+```{r hypotheses, echo = FALSE, results="hide"}
+t1 <- t.test(mpg ~ trans, paired=FALSE, var.equal=FALSE, conf.level = 0.99, alternative = "greater", data=mtcars)
+t2 <- t.test(mpg ~ trans, paired=FALSE, var.equal=FALSE, conf.level = 0.99, alternative = "less", data=mtcars)
+```
+
+The first hypotheses is rejected (p = `r t1$p.value`), while the second fails to be rejected (p = `r t2$p.value`), thereby it could be concluded with a high level of probability (> 99%) that the mpg mean for cars with manual transmission is greater than that of cars with automatic transmission.
+
+### Linear Regression
+
+In order to examine the linear model which best explains the impact of transmission type on gas consumption, in the first instance a simple linear regression model was fitted with only the "am" variable as regressor.  
+
+```{r regress1, results="hide"}
+fit1 <- lm (mpg ~ as.factor(am), data = mtcars)
+summary(fit1)
+coef <- summary(fit1)$coefficients
+```
+
+This model indicates that on average cars with manual transmission achieves `r coef[2]` more mpg than cars with automatic transmission, however, only 35.98% of the variance in the mpg values is explained by the transmission type (the $R^2$ value). 
+
+In order to develop a more complex model, the pairwise correlations of the variable values were examined (Appendix 2 - Figure 2).  It could be seen from the correlation values to the right of the mpg variable that the highest correlation exists between mpg and, wt, cyl, disp and hp (in order from highest to lowest).  It is possible that inclusion of these variables could improve on the simple linear model with only the transmission type as regressor. In order to explore this, nested model testing was performed by adding each of the above mentioned variables to the simple linear model containing 'am' as the only regressor. 
+
+```{r regress2, results="hide"}
+fit2 <- update(fit1, mpg ~ as.factor(am) + wt)
+fit3 <- update(fit1, mpg ~ as.factor(am) + wt + cyl)
+fit4 <- update(fit1, mpg ~ as.factor(am) + wt + cyl + disp)
+fit5 <- update(fit1, mpg ~ as.factor(am) + wt + cyl + disp + hp)
+anova(fit1,fit2,fit3,fit4,fit5)
+```
+
+The analysis of variance test results in Appendix 3 show that while wt and cyl are significant (very small p values), disp does not add much to explain the values of mpg, hp does add some value, but also at a lower level of significance than wt and cyl.  It is concluded that the model 'fit3 (mpg ~ as.factor(am) + wt + cyl)' is best to explore further.  This model explains 83.0% of the variance in the values of mpg.
+
+```{r regress3, results="hide"}
+summary(fit3)
+fit4 <- update(fit3, mpg ~ as.factor(am) * wt + cyl)
+anova(fit3,fit4)
+summary(fit4)
+```
+
+The interactions between 'am' and the other two regressors were added to the model fit4 (Appendix 4) to exmine whether this improves the model further.  It would appear that this does improve the model further, with it now explaining 87.7% of the variance in mpg.  However, the $R^2$ value will always increase with inclusion of more variables, but they may be unnecessary.  To determine whether this is the case, the Variance Inflation Factors of fit3 and fit4 were investigated (Appendix 5). It was found that the inclusion of the interaction terms in the model (fit4) increased the Variance Inflation Factors (VIFs) signficantly. It indicates that the inclusion of these terms are unnecessary. The model without these terms is therefor deemed to be the best predictor:  mpg ~ as.factor(am) + wt + cyl.
+
+### Model Evaluation
+
+Lastly, a variety of diagnostic measures were examined to determine the quality of the model. The code to examine the dfbeta and hatvalues of the preferred model are provided in Appendix 5.  No major differences are apparent in the residuals of the coefficients (dfbeta) nor are the largest hatvalues excessive. Finally, a number of plots of the residuals and leverage values are provided in Appendix 6.  From these plots it is seen that there is not much of a pattern in the residuals, although the fitted line is not quite straight. The Q-Q plot also indicates a good fit to the standard normal residuals, although not perfect. It is likely that outliers such as Toyota Corona and Chrysler Imperial affect the linear model, and hence, the residuals.
+
+### Question 2 and Conclusions
+
+The model best predicting the mpg value is 'as.factor(am) + wt + cyl'.  While the model indicates a 0.1765 increase on mpg for manual vs automatic tranmission, this term is acutally not significant in the model, as the bulk of the variability is explained by wt and cyl. It would appear as if these variables confound the effect of the tranmission type, hence it is not possible to exactly quantify the answer to question 2. 
+
+## Appendices
+
+### 1 - Exploratory Analysis
+
+```{r echo=FALSE, results="hide"}
+# Transform the factor variable
+mtcars$trans<- ifelse(mtcars$am == 0, "automatic", "manual")
+mtcars$trans <- as.factor (mtcars$trans)
+```
+
+```{r explore2, echo=FALSE}
+g <- ggplot(mtcars, aes(x = trans, y = mpg, fill=trans))
+g <- g + geom_boxplot() + ylab ("Miles Per Gallon") + xlab ("Tranmission Type")
+g <- g + ggtitle("Figure 1: Consumption By Transmission")
+g
+```
+
+```{r simple, echo=FALSE, results="hide"}
+fit1 <- lm (mpg ~ as.factor(am), data = mtcars)
+summary(fit1)
+```
+
+### 2 - Figure 2 Exploring Pairwise Correlation
+
+```{r explore3, echo=FALSE}
+# Strip out the temporary factor variable and treat all as continuous
+mtcars <- mtcars[,names(mtcars)!="trans"]
+g <- ggpairs(mtcars,lower = list (continuous="smooth"), params = c(method="loess"))
+g
+```
+
+### 3 - Nested Model Testing
+
+```{r nested}
+fit2 <- update(fit1, mpg ~ as.factor(am) + wt)
+fit3 <- update(fit1, mpg ~ as.factor(am) + wt + cyl)
+fit4 <- update(fit1, mpg ~ as.factor(am) + wt + cyl + disp)
+fit5 <- update(fit1, mpg ~ as.factor(am) + wt + cyl + disp + hp)
+anova(fit1,fit2,fit3,fit4,fit5)
+```
+
+### 4 - Adding Interaction Variables
+
+```{r}
+# fit3 <- lm(mpg ~ as.factor(am) + wt + cyl, data = mtcars)
+summary(fit3)
+fit4 <- update(fit3, mpg ~ as.factor(am) * wt + cyl)
+anova(fit3,fit4)
+# summary(fit4)
+```
+
+### 5 - Model Evaluation 
+
+```{r evals, results="hide"}
+sqrt(vif(fit3))
+sqrt(vif(fit4))
+round(dfbetas(fit3), 3)
+hats<-round(hatvalues(fit3), 3)
+hats[order(hats, decreasing = TRUE)][1:10]
+```
+
+### 6 - Residual Plots
+
+```{r resids}
+par(mfrow = c(2, 2), mar = c(4, 4, 4, 1))
+plot(fit3)
+```
